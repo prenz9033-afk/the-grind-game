@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Grind: A Life Simulator</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --container-bg: #2d2d2d;
+            --text-color: #ffffff;
+            --text-muted: #aaaaaa;
+            --primary-color: #ff4757;
+            --stat-bar-bg: #444444;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .game-container {
+            background-color: var(--container-bg);
+            border-radius: 12px;
+            padding: 30px;
+            width: 100%;
+            max-width: 600px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.5);
+            box-sizing: border-box;
+        }
+
+        h1 {
+            text-align: center;
+            margin-top: 0;
+            color: var(--primary-color);
+            font-size: 28px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .status-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+        }
+
+        .stat-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .stat-value {
+            font-size: 18px;
+            font-weight: bold;
+        }
+
+        .bar-container {
+            width: 100%;
+            background-color: var(--stat-bar-bg);
+            border-radius: 4px;
+            height: 10px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+
+        .bar {
+            height: 100%;
+            width: 100%;
+            transition: width 0.4s ease, background-color 0.4s ease;
+        }
+
+        #energy-bar { background-color: #2ed573; }
+        #sanity-bar { background-color: #1e90ff; }
+
+        .log-container {
+            background-color: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 15px;
+            height: 180px;
+            overflow-y: auto;
+            margin-bottom: 25px;
+            font-size: 14px;
+            line-height: 1.5;
+            border-left: 4px solid var(--primary-color);
+        }
+
+        .log-entry {
+            margin-bottom: 10px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+            padding-bottom: 5px;
+        }
+        
+        .log-entry.age-up { color: #ffa502; font-weight: bold; }
+        .log-entry.work-effect { color: #ff4757; }
+
+        .choices-container {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        button {
+            background-color: #4b4b4b;
+            color: white;
+            border: none;
+            padding: 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.2s ease;
+            text-align: left;
+        }
+
+        button:hover:not(:disabled) {
+            background-color: var(--primary-color);
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .game-over {
+            text-align: center;
+            color: var(--primary-color);
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container">
+        <h1>The Grind</h1>
+        
+        <div class="status-panel">
+            <div class="stat-group">
+                <span class="stat-label">Stage of Life</span>
+                <span id="life-stage" class="stat-value">Kid</span>
+            </div>
+            <div class="stat-group">
+                <span class="stat-label">Age</span>
+                <span id="age-display" class="stat-value">5 years old</span>
+            </div>
+            <div class="stat-group">
+                <span class="stat-label">Energy</span>
+                <div class="bar-container">
+                    <div id="energy-bar" class="bar"></div>
+                </div>
+            </div>
+            <div class="stat-group">
+                <span class="stat-label">Sanity (Soul)</span>
+                <div class="bar-container">
+                    <div id="sanity-bar" class="bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="log" class="log-container">
+            <div class="log-entry">You are a child. Life is full of wonder, free time, and endless imagination. Enjoy it while it lasts.</div>
+        </div>
+
+        <div id="choices" class="choices-container">
+            <!-- Buttons dynamically generated -->
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            age: 5,
+            stage: 'Kid', // Kid, Teenager, Young Adult, Adult, Broken
+            energy: 100,
+            sanity: 100,
+            hasJob: false,
+            jobTitle: 'None'
+        };
+
+        const logElement = document.getElementById('log');
+        const choicesElement = document.getElementById('choices');
+
+        function updateUI() {
+            document.getElementById('life-stage').innerText = state.stage;
+            document.getElementById('age-display').innerText = `${state.age} years old`;
+            document.getElementById('energy-bar').style.width = `${Math.max(0, state.energy)}%`;
+            document.getElementById('sanity-bar').style.width = `${Math.max(0, state.sanity)}%`;
+            
+            logElement.scrollTop = logElement.scrollHeight;
+            
+            if (state.sanity <= 0 || state.energy <= 0) {
+                endGame();
+                return;
+            }
+            
+            renderChoices();
+        }
+
+        function addLog(text, className = '') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${className}`;
+            entry.innerText = text;
+            logElement.appendChild(entry);
+        }
+
+        function getChoices() {
+            if (state.stage === 'Kid') {
+                return [
+                    { text: "Play outside with makeshift toys (-10 Energy, +20 Sanity)", action: () => childAction("play") },
+                    { text: "Take a long, peaceful nap (+30 Energy)", action: () => childAction("nap") }
+                ];
+            }
+            if (state.stage === 'Teenager') {
+                return [
+                    { text: "Stay up late playing video games (-20 Energy, +15 Sanity)", action: () => teenAction("games") },
+                    { text: "Study hard for future security (-15 Energy, -10 Sanity)", action: () => teenAction("study") }
+                ];
+            }
+            if (state.stage === 'Young Adult') {
+                return [
+                    { text: "Accept an entry-level corporate job (Gain employment)", action: () => startJob() },
+                    { text: "Try to pursue your creative passion (-10 Energy, +10 Sanity)", action: () => teenAction("passion") }
+                ];
+            }
+            if (state.stage === 'Adult') {
+                return [
+                    { text: "Go to work & please your boss (-40 Energy, -25 Sanity)", action: () => workAction("grind") },
+                    { text: "Call in sick to breathe (-10 Energy, +20 Sanity, Risk Job Loss)", action: () => workAction("sick") },
+                    { text: "Drink coffee to keep functioning (+30 Energy, -10 Sanity)", action: () => workAction("coffee") }
+                ];
+            }
+            return [];
+        }
+
+        function renderChoices() {
+            choicesElement.innerHTML = '';
+            const options = getChoices();
+            options.forEach(opt => {
+                const btn = document.createElement('button');
+                btn.innerText = opt.text;
+                btn.onclick = opt.action;
+                choicesElement.appendChild(btn);
+            });
+        }
+
+        function childAction(type) {
+            if (type === 'play') {
+                state.energy -= 10;
+                state.sanity = Math.min(100, state.sanity + 20);
+                addLog("You built a fort out of cardboard boxes. Your soul feels alive.");
+            } else {
+                state.energy = Math.min(100, state.energy + 30);
+                addLog("You fell asleep listening to the rain outside. Refreshing.");
+            }
+            ageUp(1);
+        }
+
+        function teenAction(type) {
+            if (type === 'games') {
+                state.energy -= 20;
+                state.sanity = Math.min(100, state.sanity + 15);
+                addLog("You spent all night playing online matches with friends. School tomorrow will hurt.");
+            } else if (type === 'study') {
+                state.energy -= 15;
+                state.sanity -= 10;
+                addLog("You memorized terms for exams. You are losing your free spirit, but prepping for society.");
+            } else {
+                state.energy -= 10;
+                state.sanity = Math.min(100, state.sanity + 10);
+                addLog("You painted a picture. It won't pay bills, but it feeds your mind.");
+            }
+            ageUp(2);
+        }
+
+        function startJob() {
+            state.hasJob = true;
+            state.stage = 'Adult';
+            state.age = 22;
+            addLog("You signed the employment contract. Welcome to corporate life. The system opens its mouth.", "age-up");
+            updateUI();
+        }
+
+        function workAction(type) {
+            if (type === 'grind') {
+                state.energy -= 40;
+                state.sanity -= 25;
+                addLog("Spreadsheets, meetings, fake smiles. Work eats your daylight. Your identity shrinks.", "work-effect");
+            } else if (type === 'sick') {
+                state.energy -= 10;
+                state.sanity = Math.min(100, state.sanity + 20);
+                addLog("You lied about having a fever. You sat in a park watching birds, remembering what freedom feels like.");
+                if (Math.random() < 0.3) {
+                    addLog("HR noticed your pattern. Your manager sends a threatening email.", "work-effect");
+                }
+            } else {
+                state.energy = Math.min(100, state.energy + 30);
+                state.sanity -= 10;
+                addLog("Caffeine forces your heart to pump faster. You feel shaky but alert. Your sanity pays the toll.");
+            }
+            ageUp(3);
+        }
+
+        function ageUp(years) {
+            state.age += years;
+            
+            if (state.age >= 13 && state.stage === 'Kid') {
+                state.stage = 'Teenager';
+                addLog("You entered your teenage years. Responsibilities begin to loom.", "age-up");
+            } else if (state.age >= 18 && state.stage === 'Teenager') {
+                state.stage = 'Young Adult';
+                addLog("You are an adult now. Bills are real. The system expects you to serve.", "age-up");
+            } else if (state.stage === 'Adult') {
+                addLog(`Another cycle passes. You are now ${state.age}. The calendar keeps ticking.`, "age-up");
+            }
+            
+            updateUI();
+        }
+
+        function endGame() {
+            choicesElement.innerHTML = '<div class="game-over">GAME OVER</div>';
+            if (state.sanity <= 0) {
+                addLog("Your soul has completely drained away. You have become a corporate zombie. You sit at your desk, executing tasks, completely eaten by the work system.", "work-effect");
+            } else if (state.energy <= 0) {
+                addLog("Total physical burnout. Your body gave out from exhaustion. The company has already posted your job opening.", "work-effect");
+            }
+        }
+
+        // Init
+        updateUI();
+    </script>
+</body>
+</html>
